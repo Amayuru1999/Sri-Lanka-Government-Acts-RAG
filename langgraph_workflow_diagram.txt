@@ -1,0 +1,133 @@
+LANGGRAPH WORKFLOW DIAGRAM
+==========================
+
+START
+  │
+  ▼
+┌─────────────────┐
+│  QuestionInput  │ ← User enters question
+└─────────────────┘
+  │
+  ▼
+┌─────────────────┐
+│ QuestionAnalyzer│ ← AI analyzes question against available acts
+└─────────────────┘
+  │
+  ▼
+┌─────────────────┐
+│QuestionReshaping│ ← Interactive question refinement
+└─────────────────┘
+  │
+  ▼
+┌─────────────────┐
+│ Decision Logic  │ ← Determines if processing should continue
+└─────────────────┘
+  │
+  ├─ "continue" ──┐
+  │               │
+  │ "end" ────────┼─► END
+  │               │
+  ▼               │
+┌─────────────────┐ │
+│CollectionSelector│ │ ← Smart collection selection
+└─────────────────┘ │
+  │               │
+  ▼               │
+┌─────────────────┐ │
+│  RAGRetriever   │ │ ← Document retrieval from selected collections
+└─────────────────┘ │
+  │               │
+  ▼               │
+┌─────────────────┐ │
+│AnswerGenerator  │ │ ← Generate final answer
+└─────────────────┘ │
+  │               │
+  ▼               │
+  └───────────────┘
+        │
+        ▼
+       END
+
+STATE FLOW:
+===========
+
+RAGState {
+  user_question: str           ← Set by QuestionInput
+  analysis_result: str         ← Set by QuestionAnalyzer
+  question_status: str         ← Set by QuestionAnalyzer
+  reshaped_question: str       ← Set by QuestionAnalyzer
+  user_approved_question: str  ← Set by QuestionReshaping
+  selected_collections: List   ← Set by CollectionSelector
+  retrieved_docs: List         ← Set by RAGRetriever
+  final_answer: str            ← Set by AnswerGenerator
+}
+
+CONDITIONAL LOGIC:
+==================
+
+QuestionReshaping → Decision Logic:
+├─ question_status == "not_answerable" → END
+├─ question_status == "answerable" → CollectionSelector
+├─ question_status == "needs_reshaping" → CollectionSelector
+└─ user_cancelled → END
+
+NODE RESPONSIBILITIES:
+======================
+
+1. QuestionInput:
+   - Capture user input
+   - Initialize user_question in state
+
+2. QuestionAnalyzer:
+   - Use LLM to analyze question
+   - Determine question_status
+   - Suggest question reshaping
+   - Pre-select relevant collections
+
+3. QuestionReshaping:
+   - Handle different question statuses
+   - Interactive user interaction
+   - Early termination for unanswerable questions
+
+4. CollectionSelector:
+   - Smart collection selection
+   - Use AI pre-selected collections
+   - Manual selection fallback
+
+5. RAGRetriever:
+   - Retrieve documents from selected collections
+   - Combine results from multiple sources
+   - Handle collection validation
+
+6. AnswerGenerator:
+   - Generate comprehensive answers
+   - Handle error cases
+   - Provide source citations
+
+ERROR HANDLING:
+===============
+
+Each node includes try-catch blocks:
+- Graceful error handling
+- Error state propagation
+- User-friendly error messages
+- System recovery mechanisms
+
+USER INTERACTION:
+=================
+
+Interactive nodes:
+- QuestionReshaping: User can modify questions
+- CollectionSelector: User can confirm/change collections
+- Early termination: User can cancel at any time
+
+BENEFITS:
+=========
+
+1. Modularity: Each node has specific responsibility
+2. State Management: Shared state across all nodes
+3. Conditional Logic: Dynamic routing based on state
+4. Error Handling: Graceful error management
+5. User Interaction: Interactive decision making
+6. Scalability: Easy to add new nodes and workflows
+

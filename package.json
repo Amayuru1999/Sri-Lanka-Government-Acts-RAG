@@ -1,0 +1,28 @@
+{
+  "name": "sri-lanka-government-acts-rag",
+  "version": "1.0.0",
+  "description": "Sri Lanka Government Acts RAG System - Full Stack Integration",
+  "main": "test-integration.js",
+  "scripts": {
+    "start": "./quick-start.sh",
+    "test": "node test-integration.js",
+    "dev": "./start-services.sh",
+    "install-all": "cd backend && npm install && cd ../frontend && npm install",
+    "clean": "pkill -f 'python.*rag_api' && pkill -f 'node.*server' && pkill -f 'vite'"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "ws": "^8.18.3"
+  },
+  "keywords": [
+    "rag",
+    "legal",
+    "sri-lanka",
+    "government-acts",
+    "nodejs",
+    "python",
+    "react"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
