@@ -5,13 +5,15 @@ import { GoogleLogin } from "@react-oauth/google";
 import signin from "../assets/images/sign.jpg";
 import footerbackheight from "../assets/images/footerbackheight.png";
 import { useNavigate } from "react-router-dom";
-import { toast } from 'react-toastify';
+import { toast } from "react-toastify";
 
 interface LoginResponse {
   token: string;
   user: {
-    id: string;
+    _id: string;
     email: string;
+    authMethod: string;
+    isVerified: boolean;
   };
 }
 
@@ -24,26 +26,58 @@ export default function SignInPage() {
 
   const navigate = useNavigate();
 
+  // const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+  //   setError("");
+
+  //   try {
+  //     const response = await axios.post<LoginResponse>(
+  //       `${import.meta.env.VITE_SERVER_API}/signin`,
+  //       { email, password }
+  //     );
+  //     toast.success('Signed in successfully!');
+  //     const { token } = response.data;
+  //     localStorage.setItem("token", token);
+  //     navigate("/chatbot");
+  //   } catch (err: any) {
+  //     setError(
+  //       err.response?.data?.message || "Login failed. Please try again."
+  //     );
+
+  //     toast.error('Invalid credentials');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      // const response = await axios.post<LoginResponse>(
-      //   `${import.meta.env.VITE_SERVER_API}/login`,
-      //   { email, password }
-      // );
-      // toast.success('Signed in successfully!');
-      // const { token } = response.data;
-      // localStorage.setItem("token", token);
+      const response = await axios.post<LoginResponse>(
+        `${import.meta.env.VITE_SERVER_API}/signin`,
+        { email, password }
+      );
+
+      toast.success("Signed in successfully!");
+
+      const { token, user } = response.data;
+
+      localStorage.setItem("token", token);
+
+      localStorage.setItem("userId", user._id);
+
+      console.log("User info:", user._id);
+
       navigate("/chatbot");
     } catch (err: any) {
-      // setError(
-      //   err.response?.data?.message || "Login failed. Please try again."
-      // );
-      navigate("/chatbot");
-      // toast.error('Invalid credentials');
+      setError(
+        err.response?.data?.message || "Login failed. Please try again."
+      );
+      toast.error("Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -151,16 +185,27 @@ export default function SignInPage() {
           <div className="space-y-3">
             <GoogleLogin
               onSuccess={async (credentialResponse) => {
-                console.log(credentialResponse.credential);
+                console.log(
+                  "Google credential:",
+                  credentialResponse.credential
+                );
                 try {
                   const response = await axios.post(
                     `${import.meta.env.VITE_SERVER_API}/google-auth`,
                     { credential: credentialResponse.credential }
                   );
+
                   localStorage.setItem("token", response.data.token);
+
+                  const userId = response.data.user._id;
+                  localStorage.setItem("userId", userId);
+
+                  console.log("Logged in user ID:", userId);
+
                   navigate("/chatbot");
                 } catch (err: any) {
                   setError("Google login failed. Please try again.");
+                  console.error(err);
                 }
               }}
               onError={() => {
