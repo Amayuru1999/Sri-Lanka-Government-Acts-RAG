@@ -1,4 +1,4 @@
 Fyp-Rag/.venv/
 **/node_modules/
 
-
+.env
