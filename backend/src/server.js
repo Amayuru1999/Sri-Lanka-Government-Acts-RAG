@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+
 // Import routes
 import chatRoutes from './routes/chat.js';
 import healthRoutes from './routes/health.js';
@@ -23,9 +24,17 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { initializeRAGService } from './services/ragService.js';
 import { initializeWebSocket } from './services/websocketService.js';
 
+import { connectDB } from "../config/db.js";
+import { config } from "../config/config.js";
+import router from './routes/index.js';
+
+
+// Connect to DB first
+await connectDB();
+
+
 // Load environment variables
 dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -92,6 +101,7 @@ app.use('/static', express.static(path.join(__dirname, '../public')));
 app.use('/api/health', healthRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/rag', ragRoutes);
+app.use("/api", router);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -138,7 +148,8 @@ const PORT = process.env.PORT || 5001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 server.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT} in ${NODE_ENV} mode`);
+  // console.log(`🚀 Server running on port ${PORT} in ${NODE_ENV} mode`);
+  console.log(`🚀 Server running on port ${config.server.port} in ${config.server.nodeEnv} mode`);
   console.log(`📡 WebSocket server ready`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   console.log(`🐍 Python RAG API: ${process.env.PYTHON_RAG_API_URL || 'http://localhost:8000'}`);

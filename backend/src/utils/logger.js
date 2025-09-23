@@ -14,6 +14,7 @@ const levels = {
   debug: 4
 };
 
+
 // Define colors for each level
 const colors = {
   error: 'red',

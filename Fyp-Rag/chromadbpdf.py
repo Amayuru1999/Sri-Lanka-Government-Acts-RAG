@@ -28,7 +28,6 @@
 # from langchain.retrievers import EnsembleRetriever
 
 
-
 # logging.basicConfig(
 #     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 # )
@@ -607,7 +606,6 @@
 # #         parser.print_help()
 
 
-
 # all_docs = vs.similarity_search("placeholder", k=vs._collection.count())
 # bm25_retriever = BM25Retriever.from_documents(all_docs)
 # bm25_retriever.k = 5
@@ -684,18 +682,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+
+# from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
-from langchain.retrievers import BM25Retriever, EnsembleRetriever, ContextualCompressionRetriever
+from langchain.retrievers import (
+    BM25Retriever,
+    EnsembleRetriever,
+    ContextualCompressionRetriever,
+)
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain.prompts import PromptTemplate
 
 from sentence_transformers import CrossEncoder
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 # ---------------- Config ----------------
 PDF_DIR = os.getenv("PDF_DIR", "./Civil Aviation/act")
@@ -717,14 +723,18 @@ OCR_PROMPT = os.getenv(
 
 try:
     from openai import OpenAI
+
     openai_client: Optional["OpenAI"] = OpenAI()
     _has_openai = True
 except Exception:
-    logging.warning("OpenAI SDK not available or OPENAI_API_KEY not set. OCR fallback disabled.")
+    logging.warning(
+        "OpenAI SDK not available or OPENAI_API_KEY not set. OCR fallback disabled."
+    )
     openai_client = None
     _has_openai = False
 
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')  # Re-ranking
+cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")  # Re-ranking
+
 
 # ---------------- PDF Helpers ----------------
 def normalize_ws(text: str) -> str:
@@ -732,11 +742,13 @@ def normalize_ws(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
+
 def render_page_png(page: fitz.Page, dpi: int = OCR_DPI) -> bytes:
     zoom = dpi / 72.0
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat, alpha=False)
     return pix.tobytes("png")
+
 
 def ocr_png_with_openai(img_bytes: bytes) -> str:
     if not _has_openai:
@@ -749,12 +761,20 @@ def ocr_png_with_openai(img_bytes: bytes) -> str:
                 model=OPENAI_CHAT_MODEL,
                 temperature=0,
                 messages=[
-                    {"role": "system", "content": "You are an OCR assistant for legal documents."},
+                    {
+                        "role": "system",
+                        "content": "You are an OCR assistant for legal documents.",
+                    },
                     {
                         "role": "user",
                         "content": [
                             {"type": "text", "text": OCR_PROMPT},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{img_b64}"
+                                },
+                            },
                         ],
                     },
                 ],
@@ -765,9 +785,11 @@ def ocr_png_with_openai(img_bytes: bytes) -> str:
             last_err = e
             if attempt < OCR_MAX_RETRIES:
                 import time
+
                 time.sleep(OCR_BACKOFF ** (attempt - 1))
     logging.error(f"OCR failed after {OCR_MAX_RETRIES} attempts: {last_err}")
     return ""
+
 
 def extract_text_from_pdf(pdf_path: str) -> List[Tuple[int, str]]:
     try:
@@ -782,7 +804,9 @@ def extract_text_from_pdf(pdf_path: str) -> List[Tuple[int, str]]:
                     if len(ocr_text) > len(text):
                         text = ocr_text
                 except Exception as e:
-                    logging.warning(f"OCR failed for page {page_num} in {pdf_path}: {e}")
+                    logging.warning(
+                        f"OCR failed for page {page_num} in {pdf_path}: {e}"
+                    )
             if text.strip():
                 text_pages.append((page_num, text.strip()))
         doc.close()
@@ -791,11 +815,16 @@ def extract_text_from_pdf(pdf_path: str) -> List[Tuple[int, str]]:
         logging.error(f"Error extracting text from {pdf_path}: {e}")
         return []
 
-def process_pdf(pdf_file: str, pdf_dir: str, text_splitter: RecursiveCharacterTextSplitter):
+
+def process_pdf(
+    pdf_file: str, pdf_dir: str, text_splitter: RecursiveCharacterTextSplitter
+):
     full_path = os.path.join(pdf_dir, pdf_file)
     pages = extract_text_from_pdf(full_path)
     try:
-        document_id = uuid.uuid5(uuid.NAMESPACE_URL, Path(full_path).resolve().as_uri()).hex
+        document_id = uuid.uuid5(
+            uuid.NAMESPACE_URL, Path(full_path).resolve().as_uri()
+        ).hex
     except Exception:
         document_id = uuid.uuid4().hex
 
@@ -808,18 +837,21 @@ def process_pdf(pdf_file: str, pdf_dir: str, text_splitter: RecursiveCharacterTe
             if len(chunk) < 30:
                 continue
             chunks.append(chunk)
-            metadata_list.append({
-                "source": pdf_file,
-                "source_path": str(Path(full_path).resolve()),
-                "page_number": page_num,
-                "chunk_id": i,
-                "document_id": document_id,
-                "document_type": "Legal Document",
-                "jurisdiction": "Unknown",
-                "upload_date": upload_date,
-            })
+            metadata_list.append(
+                {
+                    "source": pdf_file,
+                    "source_path": str(Path(full_path).resolve()),
+                    "page_number": page_num,
+                    "chunk_id": i,
+                    "document_id": document_id,
+                    "document_type": "Legal Document",
+                    "jurisdiction": "Unknown",
+                    "upload_date": upload_date,
+                }
+            )
             ids.append(f"{document_id}-p{page_num}-c{i}")
     return chunks, metadata_list, ids, document_id
+
 
 def process_all_pdfs(pdf_dir: str, persist_directory: str, collection_name: str):
     if not os.path.exists(pdf_dir):
@@ -832,13 +864,23 @@ def process_all_pdfs(pdf_dir: str, persist_directory: str, collection_name: str)
     logging.info(f"Found {len(pdf_files)} PDFs in {pdf_dir}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    embeddings = HuggingFaceEmbeddings(model_name="nlpaueb/legal-bert-base-uncased", model_kwargs={"device": device})
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200, length_function=len)
-    vector_db = Chroma(persist_directory=persist_directory, embedding_function=embeddings, collection_name=collection_name)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="nlpaueb/legal-bert-base-uncased", model_kwargs={"device": device}
+    )
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000, chunk_overlap=200, length_function=len
+    )
+    vector_db = Chroma(
+        persist_directory=persist_directory,
+        embedding_function=embeddings,
+        collection_name=collection_name,
+    )
 
     all_chunks, all_metadatas, all_ids = [], [], []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(lambda pdf: process_pdf(pdf, pdf_dir, text_splitter), pdf_files)
+        results = executor.map(
+            lambda pdf: process_pdf(pdf, pdf_dir, text_splitter), pdf_files
+        )
         for pdf_file, (chunks, metadatas, ids, _) in zip(pdf_files, results):
             if not chunks:
                 logging.warning(f"Skipping empty PDF: {pdf_file}")
@@ -853,18 +895,31 @@ def process_all_pdfs(pdf_dir: str, persist_directory: str, collection_name: str)
     vector_db.add_texts(texts=all_chunks, metadatas=all_metadatas, ids=all_ids)
     logging.info(f"Finished processing {len(all_chunks)} chunks into {collection_name}")
 
+
 def ingest_both():
     process_all_pdfs(PDF_DIR, PERSIST_DIR, COLLECTION_NAME)
     process_all_pdfs(AMENDMENT_PDF_DIR, PERSIST_DIR, AMENDMENT_COLLECTION_NAME)
 
+
 # ---------------- Vectorstores ----------------
 def get_vectorstores() -> Dict[str, Chroma]:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    embeddings = HuggingFaceEmbeddings(model_name="nlpaueb/legal-bert-base-uncased", model_kwargs={"device": device})
+    embeddings = HuggingFaceEmbeddings(
+        model_name="nlpaueb/legal-bert-base-uncased", model_kwargs={"device": device}
+    )
     return {
-        "acts": Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings, collection_name=COLLECTION_NAME),
-        "amendments": Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings, collection_name=AMENDMENT_COLLECTION_NAME),
+        "acts": Chroma(
+            persist_directory=PERSIST_DIR,
+            embedding_function=embeddings,
+            collection_name=COLLECTION_NAME,
+        ),
+        "amendments": Chroma(
+            persist_directory=PERSIST_DIR,
+            embedding_function=embeddings,
+            collection_name=AMENDMENT_COLLECTION_NAME,
+        ),
     }
+
 
 def build_doc_index(vs: Chroma) -> Dict[str, Dict[str, Any]]:
     col = vs._collection
@@ -877,18 +932,25 @@ def build_doc_index(vs: Chroma) -> Dict[str, Dict[str, Any]]:
             by_doc[doc_id] = {"source": m.get("source"), "document_id": doc_id}
     return by_doc
 
-def retrieve_topk_per_document(vs: Chroma, question: str, doc_ids: List[str], k_per_doc: int = 3) -> Dict[str, List[Document]]:
+
+def retrieve_topk_per_document(
+    vs: Chroma, question: str, doc_ids: List[str], k_per_doc: int = 3
+) -> Dict[str, List[Document]]:
     per_doc_hits = {}
     for doc_id in doc_ids:
-        hits = vs.similarity_search(question, k=k_per_doc, filter={"document_id": doc_id})
+        hits = vs.similarity_search(
+            question, k=k_per_doc, filter={"document_id": doc_id}
+        )
         per_doc_hits[doc_id] = hits
     return per_doc_hits
+
 
 def rerank(query: str, docs: List[Document]) -> List[Document]:
     pairs = [[query, d.page_content] for d in docs]
     scores = cross_encoder.predict(pairs)
     sorted_docs = [doc for _, doc in sorted(zip(scores, docs), reverse=True)]
     return sorted_docs
+
 
 # ---------------- Map-Reduce ----------------
 def make_map_prompt(question: str, doc_title: str, chunks: List[Document]) -> str:
@@ -917,7 +979,13 @@ Rules:
 - If no relevant info, reply exactly "No relevant information."
 """
 
-def map_step(llm: ChatOpenAI, question: str, per_doc_hits: Dict[str, List[Document]], doc_catalog: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+
+def map_step(
+    llm: ChatOpenAI,
+    question: str,
+    per_doc_hits: Dict[str, List[Document]],
+    doc_catalog: Dict[str, Dict[str, Any]],
+) -> Dict[str, str]:
     answers = {}
     for doc_id, chunks in per_doc_hits.items():
         title = doc_catalog.get(doc_id, {}).get("source") or f"document {doc_id[:8]}"
@@ -927,7 +995,12 @@ def map_step(llm: ChatOpenAI, question: str, per_doc_hits: Dict[str, List[Docume
         answers[doc_id] = ans
     return answers
 
-def make_reduce_prompt(question: str, per_doc_answers: Dict[str, str], doc_catalog: Dict[str, Dict[str, Any]]) -> str:
+
+def make_reduce_prompt(
+    question: str,
+    per_doc_answers: Dict[str, str],
+    doc_catalog: Dict[str, Dict[str, Any]],
+) -> str:
     lines = []
     for doc_id, ans in per_doc_answers.items():
         title = doc_catalog.get(doc_id, {}).get("source") or f"document {doc_id[:8]}"
@@ -951,12 +1024,68 @@ Task:
 Final Answer:
 """
 
-def reduce_step(llm: ChatOpenAI, question: str, per_doc_answers: Dict[str, str], doc_catalog: Dict[str, Dict[str, Any]]) -> str:
-    prompt = make_reduce_prompt(question, per_doc_answers, doc_catalog)
-    resp = llm.invoke(prompt)
-    return (resp.content or "").strip()
 
-def answer_question_map_reduce(question: str, k_per_doc: int = 4, model: str = OPENAI_CHAT_MODEL, temperature: float = LLM_TEMPERATURE) -> str:
+# def reduce_step(llm: ChatOpenAI, question: str, per_doc_answers: Dict[str, str], doc_catalog: Dict[str, Dict[str, Any]]) -> str:
+#     prompt = make_reduce_prompt(question, per_doc_answers, doc_catalog)
+#     resp = llm.invoke(prompt)
+#     return (resp.content or "").strip()
+
+# def answer_question_map_reduce(question: str, k_per_doc: int = 4, model: str = OPENAI_CHAT_MODEL, temperature: float = LLM_TEMPERATURE) -> str:
+#     vs_dict = get_vectorstores()
+#     llm = ChatOpenAI(model=model, temperature=temperature)
+
+#     per_doc_answers_all = {}
+#     doc_catalog_all = {}
+
+#     for name, vs in vs_dict.items():
+#         all_docs = vs.similarity_search("placeholder", k=vs._collection.count())
+#         bm25 = BM25Retriever.from_documents(all_docs)
+#         bm25.k = k_per_doc
+#         dense = vs.as_retriever(search_kwargs={"k": k_per_doc})
+#         hybrid = EnsembleRetriever(retrievers=[bm25, dense], weights=[0.5, 0.5])
+
+#         doc_catalog = build_doc_index(vs)
+#         doc_catalog_all.update(doc_catalog)
+#         if not doc_catalog:
+#             logging.warning(f"No documents in {name} collection.")
+#             continue
+
+#         doc_ids = list(doc_catalog.keys())
+#         per_doc_hits = {}
+#         for doc_id in doc_ids:
+#             chunks = hybrid.get_relevant_documents(question)
+#             # Filter by document_id
+#             filtered_chunks = [c for c in chunks if c.metadata.get("document_id") == doc_id]
+#             per_doc_hits[doc_id] = filtered_chunks[:k_per_doc]
+
+#         per_doc_answers = map_step(llm, question, per_doc_hits, doc_catalog)
+#         per_doc_answers_all.update(per_doc_answers)
+
+#     final_answer = reduce_step(llm, question, per_doc_answers_all, doc_catalog_all)
+#     return final_answer
+
+
+def reduce_step(
+    llm: ChatOpenAI,
+    question: str,
+    per_doc_answers: Dict[str, str],
+    doc_catalog: Dict[str, Dict[str, Any]],
+) -> str:
+    prompt_text = make_reduce_prompt(question, per_doc_answers, doc_catalog)
+    try:
+        resp = llm.invoke(prompt_text)
+        return (resp.content or "").strip()
+    except Exception as e:
+        logging.error(f"Error in reduce step: {e}")
+        return "An error occurred while generating the final answer."
+
+
+def answer_question_map_reduce(
+    question: str,
+    k_per_doc: int = 4,
+    model: str = OPENAI_CHAT_MODEL,
+    temperature: float = LLM_TEMPERATURE,
+) -> str:
     vs_dict = get_vectorstores()
     llm = ChatOpenAI(model=model, temperature=temperature)
 
@@ -964,7 +1093,14 @@ def answer_question_map_reduce(question: str, k_per_doc: int = 4, model: str = O
     doc_catalog_all = {}
 
     for name, vs in vs_dict.items():
-        all_docs = vs.similarity_search("placeholder", k=vs._collection.count())
+        doc_count = vs._collection.count()
+        if doc_count == 0:
+            logging.warning(f"Collection '{name}' is empty. Skipping.")
+            continue
+
+        # Safe similarity search
+        all_docs = vs.similarity_search("placeholder", k=doc_count)
+
         bm25 = BM25Retriever.from_documents(all_docs)
         bm25.k = k_per_doc
         dense = vs.as_retriever(search_kwargs={"k": k_per_doc})
@@ -972,28 +1108,36 @@ def answer_question_map_reduce(question: str, k_per_doc: int = 4, model: str = O
 
         doc_catalog = build_doc_index(vs)
         doc_catalog_all.update(doc_catalog)
+
         if not doc_catalog:
-            logging.warning(f"No documents in {name} collection.")
+            logging.warning(f"No documents found in '{name}' catalog. Skipping.")
             continue
 
-        doc_ids = list(doc_catalog.keys())
         per_doc_hits = {}
-        for doc_id in doc_ids:
+        for doc_id in doc_catalog.keys():
             chunks = hybrid.get_relevant_documents(question)
-            # Filter by document_id
-            filtered_chunks = [c for c in chunks if c.metadata.get("document_id") == doc_id]
+            filtered_chunks = [
+                c for c in chunks if c.metadata.get("document_id") == doc_id
+            ]
             per_doc_hits[doc_id] = filtered_chunks[:k_per_doc]
 
         per_doc_answers = map_step(llm, question, per_doc_hits, doc_catalog)
         per_doc_answers_all.update(per_doc_answers)
 
+    if not per_doc_answers_all:
+        logging.warning("No relevant documents found in any collection.")
+        return "No relevant information found in the database."
+
     final_answer = reduce_step(llm, question, per_doc_answers_all, doc_catalog_all)
     return final_answer
+
 
 # ---------------- Main ----------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ingest", action="store_true", help="Ingest PDFs into vector DB")
+    parser.add_argument(
+        "--ingest", action="store_true", help="Ingest PDFs into vector DB"
+    )
     parser.add_argument("--query", type=str, help="Question to ask the legal DB")
     args = parser.parse_args()
 
